@@ -546,7 +546,8 @@ var events = module.requireNative('events');
     if (isSignal(type)) {
       if (!signalWatchers.hasOwnProperty(type)) {
         var b = process.binding('signal_watcher'),
-          w = new b.SignalWatcher(process[type]);
+          w = new b.SignalWatcher();
+          w.set(process[type]);
           w.callback = function () {
             process.emit(type);
           }
