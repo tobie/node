@@ -69,6 +69,12 @@ class EventSource : public ObjectWrap {
 
   static void WeakParent(v8::Persistent<v8::Value> object, void* data);
 
+  // Internal MakeCallback function. 
+  v8::Local<v8::Value> _MakeCallback(v8::Handle<v8::Function> cb,
+                                     v8::Handle<v8::Object> target,
+                                     int argc,
+                                     v8::Handle<v8::Value> argv[]);
+
   void RecordStack();
   void ClearStack();
   void DeleteParent();

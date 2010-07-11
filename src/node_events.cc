@@ -9,6 +9,7 @@ using namespace v8;
 Persistent<FunctionTemplate> EventEmitter::constructor_template;
 
 static Persistent<String> events_symbol;
+static Persistent<String> tick_callback_sym;
 
 void EventEmitter::Initialize(Local<FunctionTemplate> ctemplate) {
   HandleScope scope;
@@ -75,21 +76,18 @@ bool EventEmitter::Emit(Handle<String> event, int argc, Handle<Value> argv[]) {
 EventSource* EventSource::current_source;
 
 
-Local<Value> EventSource::MakeCallback(int argc, Handle<Value> argv[]) {
-  HandleScope scope;
-
-  Local<Value> callback_v = handle_->Get(String::NewSymbol("callback"));
-  if (!callback_v->IsFunction()) return Local<Value>();
-  Local<Function> callback = Local<Function>::Cast(callback_v);
-
-  // TODO DTrace probe here.
-
+Local<Value> EventSource::_MakeCallback(Handle<Function> cb,
+                                        Handle<Object> target,
+                                        int argc,
+                                        Handle<Value> argv[]) {
+  // HandleScope isn't needed here because it is only called within 
+  // MakeCallback
   TryCatch try_catch;
 
   assert(current_source == NULL);
   current_source = this;
 
-  Local<Value> ret = callback->Call(handle_, argc, argv);
+  Local<Value> ret = cb->Call(target, argc, argv);
 
   current_source = NULL;
 
@@ -100,13 +98,51 @@ Local<Value> EventSource::MakeCallback(int argc, Handle<Value> argv[]) {
     ReportException(try_catch, true);
     // Then we print the stored stacktrace plus our ancestors stacks.
     PrintStack();
+
     // XXX Stop whatever activity might have been going on?
 
     exit(1);
   }
 
-  // Call nextTick callbacks?
+  return ret;
+}
 
+
+static Persistent<Function> tick_cb;
+static Persistent<Object> process;
+
+
+Local<Value> EventSource::MakeCallback(int argc, Handle<Value> argv[]) {
+  HandleScope scope;
+
+  Local<Value> callback_v = handle_->Get(String::NewSymbol("callback"));
+  if (!callback_v->IsFunction()) return Local<Value>();
+  Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  // TODO DTrace probe here.
+
+  Local<Value> ret = _MakeCallback(callback, handle_, argc, argv);
+
+  // After every callback try to call pending nextTicks.
+  if (!ret.IsEmpty()) {
+    if (tick_cb.IsEmpty() || process.IsEmpty()) {
+      Local<Object> global = v8::Context::GetCurrent()->Global();
+      process = Persistent<Object>::New(global->Get(String::NewSymbol("process"))->ToObject());
+
+      // Look up process._tickCallback which is referenced in src/node.js.
+      Local<Value> tick_cb_v = process->Get(String::NewSymbol("_tickCallback"));
+      if (!tick_cb_v->IsFunction()) {
+        fprintf(stderr, "process._tickCallback undefined. Bad.\n");
+        assert(0);
+        return scope.Close(ret);
+      }
+
+      tick_cb = Persistent<Function>::New(Local<Function>::Cast(tick_cb_v));
+    }
+
+    ret = _MakeCallback(tick_cb, process, 0, NULL);
+  }
+  
   return scope.Close(ret);
 }
 

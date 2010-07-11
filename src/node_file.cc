@@ -171,6 +171,7 @@ void EIORequest::Set(eio_req *req, Handle<Value> callback) {
   r->Set(req, callback);                                  \
   return scope.Close(r->handle_);
 
+
 static Handle<Value> Close(const Arguments& args) {
   HandleScope scope;
 
