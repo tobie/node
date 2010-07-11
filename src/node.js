@@ -518,7 +518,7 @@ var module = (function () {
   exports.runMain = function () {
     // Load the main module--the command line argument.
     process.mainModule = new Module(".");
-    process.mainModule.loadSync(process.argv[1]);
+    process.mainModule.load(process.argv[1]);
   }
 
   return exports;
