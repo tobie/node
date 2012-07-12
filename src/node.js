@@ -67,7 +67,14 @@ process._tickCallback = function () {
 };
 
 process.nextTick = function (callback) {
-  nextTickQueue.push(callback);
+  if(arguments.length === 1) {
+    nextTickQueue.push(callback);
+  }
+  else {
+    nextTickQueue.push(function () {
+      callback.call(undefined, Array.prototype.slice.call(arguments, 1));
+    });
+  }
   process._needTickCallback();
 };
 
